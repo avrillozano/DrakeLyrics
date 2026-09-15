@@ -1,0 +1,141 @@
+---
+title: "Drake Lyrics Analysis"
+author: "avril"
+date: "2025-10-29"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+library(tidyverse)
+library(stringr)
+library(tidytext)
+library(kableExtra)
+library(tm)
+library(wordcloud)
+library(SnowballC)
+```
+
+# Intro
+
+I started with a dataset from [[**Kaggle**]{.underline}](https://www.kaggle.com/datasets/juicobowley/drake-lyrics?resource=download) containing all of Drake's lyrics at the time of its creation. In this project, I perform textual normalization on song lyrics, evaluate word frequency distributions, analyze key terms across albums, and investigate the relationship between lyric themes (specifically the word "love") and overall track popularity.
+
+```{r}
+#cleaning up the data
+drake_combined=c()
+for(i in 1:11){
+  d=read.csv(paste0("drake_data_",i,".csv"))
+  drake_combined=rbind(drake_combined,d)
+}
+drake_combined$lyrics=str_to_lower(drake_combined$lyrics)
+drake_combined=mutate(drake_combined,
+                      lyrics = gsub("[&\\:\\,\\.\\?\\![:digit:]\\\n]", "",lyrics))
+```
+
+# Top 10 words
+
+This table displays the top 10 most frequently occuring words.
+
+```{r}
+lyrics_only=drake_combined$lyrics
+lyrics_words=str_split(lyrics_only," ", simplify=TRUE)
+lyrics_words_vec=as.vector(lyrics_words)
+lyrics_words_vec=lyrics_words_vec[lyrics_words_vec!=""]
+my.table=as.data.frame(table(lyrics_words_vec))
+my.sort=arrange(my.table,desc(Freq))
+colnames(my.sort)=c("Word","Frequency")
+kbl(my.sort[1:15,])
+```
+
+However, the words are mostly filler words, so here I cleaned up the data a bit to make a more informative table.
+
+```{r}
+freq_lyrics <- lyrics_words_vec[!lyrics_words_vec %in% stop_words$word]
+freq_table <- as.data.frame(table(freq_lyrics))
+freq_sorted <- arrange(freq_table,desc(Freq))
+colnames(freq_sorted)=c("Word","Frequency")
+kbl(freq_sorted[1:15,])
+```
+
+Now, a word cloud. I used [[***this***]{.underline}](https://lukesingham.com/how-to-make-a-word-cloud-using-r/) very helpful tutorial!
+
+```{r}
+wordcloud(freq_sorted$Word, freq_sorted$Frequency, scale=c(5,0.5) 
+        , 100   
+        , random.order=FALSE 
+        , rot.per=0.35       
+        , use.r.layout=FALSE, colors=brewer.pal(8, "Dark2"))
+```
+
+Definitely some interesting results!
+
+# Occurence of words across albums
+
+Here I choose five words and count their occurrences across albums
+
+```{r}
+my.albums=unique(c(drake_combined$album))
+table=c()
+my.words=c("love","drake","respect","money","trust")
+for(j in 1:length(my.albums)){
+  my.sub=drake_combined[drake_combined$album==my.albums[j],]
+  counts=vector(length=5)
+  for(i in 1:5){
+    counts[i]=sum(str_count(my.sub$lyrics,my.words[i]))
+  }
+  table=rbind(table,counts)
+}
+table=as.data.frame(table)
+colnames(table)=my.words
+table=cbind(my.albums,table)
+kable_classic(kbl(table,row.names=FALSE))
+```
+
+Now in barplot form
+
+```{r}
+table_long=pivot_longer(table,cols=my.words,names_to="word",values_to="count")
+for(i in 1:5){
+  sub=table_long[table_long$word==my.words[i],]
+  myplot=ggplot(sub)+geom_bar(aes(x=my.albums,
+                                  y=count,fill=my.albums),stat="identity") + labs(title=paste("Counts of the word:",
+                                                                                              my.words[i]),x="Album name",y="Count") + theme(legend.position = "none")+ coord_flip() 
+  print(myplot)
+}
+```
+
+Here I track the success of tracks by use of the word "love"
+
+```{r}
+drake_combined$love=str_count(drake_combined$lyrics,"love")
+view_number=c()
+for(i in 1:length(drake_combined$track_views)){
+  if(is.na(drake_combined$track_views[i])){
+    view_number=c(view_number,NA)
+  }
+  else if(str_detect(drake_combined$track_views[i],"K")==TRUE)
+  {
+    view_number[i]=parse_number(drake_combined$track_views[i])*1000
+  }
+  else if(str_detect(drake_combined$track_view[i],"M")==TRUE)
+  {
+    view_number[i]=parse_number(drake_combined$track_views[i])*1000000
+  }
+  else
+  {
+    view_number[i]=parse_number(drake_combined$track_views)
+  }
+}
+drake_combined$track_views=view_number
+ggplot(drake_combined) + geom_point(aes(x=love,
+                                        y=track_views,color=album)) + labs(title="Uses of the word 'Love' by track views", x="Frequency",y="Track views")
+```
+
+We can see that, in general, his tracks that did the best didn't use the word "love" too much.
+
+# Conclusion/Reflections
+
+We definitely saw some pretty interesting results overall. We saw that tracks with high view counts (\> 50M views) usually feature lower frequencies of the word "love". Also, the most frequently used words were a bit surprising to me, I was definitely not expecting "love" to be the top word!
+
