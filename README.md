@@ -22,3 +22,5 @@ library(tm)
 library(wordcloud)
 library(SnowballC)
 ```
+## Sources:
+Drake Lyrics Dataset. (n.d.). Kaggle. https://www.kaggle.com/datasets/juicobowley/drake-lyrics?resource=download
